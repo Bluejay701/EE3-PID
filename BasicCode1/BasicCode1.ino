@@ -69,26 +69,23 @@ void setup() {
   
 }
 
-void loop() {
-  // put your main code here, to run repeatedly: 
-  currentTime = millis();
-  if(PID_ON){
-    if((currentTime-previousTime)>interval){
-      doCalibration();
-      previousTime=currentTime;
+void doCalibration(){
+  for(int n=0; n<8; n++){
+    all_sets[8][8] = ECE3_read_IR(sensorValues);
+  }
+  for(int j=0; j<8; j++){ //iterate through each row
+    int maximumVal=all_set[j][0];
+    int minimumVal=all_set[j][0];
+    for (int i=0; i<8; i++){  //iterate through each column
+      if(all_sets[j][k]>maximumVal){
+        maximum[j] = all_sets[j][k];
+      }
+      if(all_sets[j][k]<minimumVal){
+        minimum[j] = all_sets[j][k];
+      }
+   
     }
-    //ECE3_read_IR(sensorValues);
-
-    for(int i=0; i<8; i++){
-      sensor_values[i] = static_cast<int>(sensorValues[i]);
-    }
-  getError();
-  getPID_error();
-  Serial.println(error);
-  //+error: center of car too much to the left (+pid_error to left)
-  //-error: center of car too much to the right (+pid_error to right)
-  analogWrite(left_pwm_pin,spd+pid_error);
-  analogWrite(right_pwm_pin,spd-pid_error);
+  }
   
 }
 
@@ -112,23 +109,26 @@ void getError(){
   }
 }
 
-void doCalibration(){
-  for(int n=0; n<8; n++){
-    all_sets[8][8] = ECE3_read_IR(sensorValues);
-  }
-  for(int j=0; j<8; j++){ //iterate through each row
-    int maximumVal=all_set[j][0];
-    int minimumVal=all_set[j][0];
-    for (int i=0; i<8; i++){  //iterate through each column
-      if(all_sets[j][k]>maximumVal){
-        maximum[j] = all_sets[j][k];
-      }
-      if(all_sets[j][k]<minimumVal){
-        minimum[j] = all_sets[j][k];
-      }
-   
+void loop() {
+  // put your main code here, to run repeatedly: 
+  currentTime = millis();
+  if(PID_ON){
+    if((currentTime-previousTime)>interval){
+      doCalibration();
+      previousTime=currentTime;
     }
-  }
+    //ECE3_read_IR(sensorValues);
+
+    for(int i=0; i<8; i++){
+      sensor_values[i] = static_cast<int>(sensorValues[i]);
+    }
+  getError();
+  getPID_error();
+  // Serial.println(error);
+  //+error: center of car too much to the left (+pid_error to left)
+  //-error: center of car too much to the right (+pid_error to right)
+  analogWrite(left_pwm_pin,spd+pid_error);
+  analogWrite(right_pwm_pin,spd-pid_error);
   
 }
 
@@ -143,9 +143,9 @@ void doCalibration(){
   
   ECE3_read_IR(sensorValues);
 
-  digitalWrite(LED_RF, HIGH);
-  delay(250);
-  digitalWrite(LED_RF, LOW);
-  delay(250);
+  // digitalWrite(LED_RF, HIGH);
+  // delay(250);
+  // digitalWrite(LED_RF, LOW);
+  // delay(250);
     
 }
