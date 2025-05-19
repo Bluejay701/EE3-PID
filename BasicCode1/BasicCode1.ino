@@ -25,6 +25,9 @@ void doCalibration();
 void getPID_error();
 void getData();
 
+bool white_or_black[8] = {0};
+int white_threshold[8] = {1000,900,900,800,900,750,900,1100};
+
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
@@ -41,8 +44,9 @@ uint16_t currentTime = 0;
 const int interval = 6; //ms
 bool PID_ON=true;
 //double kp, kd, ki;
-double kp = -0.004;
-double kd = -0.1;
+// 5/19/25: CONSTANTS
+double kp = -0.04;
+double kd = -0.2;
 double ki = 0;
 
 ///////////////////////////////////
@@ -96,22 +100,24 @@ void getPID_error(){
   deltaE = error-last_error;
   totalError += error;
   pid_error = kp*error + kd*deltaE + ki*totalError;
-  if(spd+pid_error>MAXSPEED){
-    pid_error = MAXSPEED-spd;
-  }else if ((spd-pid_error)<-MAXSPEED){
-    pid_error = -MAXSPEED+spd;
-  }
+  // 5/19/25: commented out maxspeed stuff
+//  if(spd+pid_error>MAXSPEED){
+//    pid_error = MAXSPEED-spd;
+//  }else if ((spd-pid_error)<-MAXSPEED){
+//    pid_error = -MAXSPEED+spd;
+//  }
   last_error = error;
 }
 
 void getError(){
   error = 0;
   for(int k=0; k<8; k++){
-    if (sensor_values[k] < minimum[k]) {
-      sensor_values[k] = 0;
-    } else {
-      sensor_values[k] -= minimum[k];
-    }
+    // 5/19/25: commented out stuff related to minimums
+//    if (sensor_values[k] < minimum[k]) {
+//      sensor_values[k] = 0;
+//    } else {
+//      sensor_values[k] -= minimum[k];
+//    }
     
     //sensor_values[k]*= 1000/maximum[k];
     error += sensor_values[k]*weights[k];
@@ -132,15 +138,42 @@ void loop() {
       sensor_values[i] = sensorValues[i];
 //      Serial.print(sensor_values[i]);
 //      Serial.print('\t');
+
+      // 5/19/25: added logic that allows us to modify the bool array like we had before
+      if (sensor_values[i] > white_threshold[i]) {
+        white_or_black[i] = true;
+      } else {
+        white_or_black[i] = false;
+      }
     }
 //    Serial.println();
   getError();
   getPID_error();
-  Serial.println(error);
+//  Serial.println(error);
+
+  // CHANGE MADE 5/19/25: allow wheels to turn in reverse
+
+  int left_spd = spd + pid_error;
+  int right_spd = spd - pid_error;
+  
+  if (left_spd < 0) {
+    digitalWrite(left_dir_pin, HIGH);
+  } else {
+    digitalWrite(left_dir_pin, LOW);
+  }
+
+  if (right_spd < 0) {
+    digitalWrite(right_dir_pin, HIGH);
+  } else {
+    digitalWrite(right_dir_pin, LOW);
+  }
+
+  
   //+error: center of car too much to the left (+pid_error to left)
   //-error: center of car too much to the right (+pid_error to right)
-  analogWrite(left_pwm_pin,spd+pid_error);
-  analogWrite(right_pwm_pin,spd-pid_error);
+  //5/19/25: ADDED CONSTRAIN
+  analogWrite(left_pwm_pin,constrain(left_spd, 0, MAXSPEED));
+  analogWrite(right_pwm_pin,constrain(right_spd, 0, MAXSPEED));
   
 }
 
