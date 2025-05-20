@@ -8,6 +8,7 @@
 // *  make the car do anything useful. 
 // 
 #include<ECE3.h>
+#include <stdio.h>
 //#include <ECE3_LCD7.h>
 
 uint16_t sensorValues[8]; // right -> left, 0 -> 7
@@ -27,6 +28,7 @@ void getData();
 
 bool white_or_black[8] = {0};
 int white_threshold[8] = {1000,900,900,800,900,750,900,1100};
+int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
@@ -45,13 +47,22 @@ const int interval = 6; //ms
 bool PID_ON=true;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
-double kp = -0.04;
-double kd = -0.2;
+double kp = -0.005;
+double kd = -0.05;
 double ki = 0;
+
+// Recognize path type
+bool arch = false;
+
+int getL=0;
+int getR=0;
+int avg_pulse=0;
+
 
 ///////////////////////////////////
 void setup() {
-// put your setup code here, to run once:
+  ECE3_Init();
+
   pinMode(left_nslp_pin,OUTPUT);
   pinMode(left_dir_pin,OUTPUT);
   pinMode(left_pwm_pin,OUTPUT);
@@ -67,11 +78,13 @@ void setup() {
   digitalWrite(right_nslp_pin,HIGH);
 
   pinMode(LED_RF, OUTPUT);
-  
-  ECE3_Init();
 
 // set the data rate in bits/second for serial data transmission
-  Serial.begin(9600); 
+  Serial.begin(9600);
+
+  resetEncoderCount_left();
+  resetEncoderCount_right();
+   
   delay(2000); //Wait 2 seconds before starting 
   
 }
@@ -95,6 +108,15 @@ void setup() {
 //  }
 //  
 //}
+
+int average_pulse_count(){
+  getL=getEncoderCount_left();
+  getR=getEncoderCount_right();
+//  Serial.print(getL);
+//  Serial.print('\t');
+//  Serial.print(getR);
+  return((getEncoderCount_left()+getEncoderCount_right())/2);
+}
 
 void getPID_error(){
   deltaE = error-last_error;
@@ -124,6 +146,30 @@ void getError(){
   }
 }
 
+void checkTrackType(){
+  avg_pulse = average_pulse_count();  // start encoder counts from 0
+
+    // CHANGE MADE 5/19/25: After wheels rotate 200 counts AND either condition (3 or 4 zeros in between 2 ones) are true, toggle ON boolean for arch
+    for (int n=0; n<8; n++){
+      if (avg_pulse>200 && ((white_or_black[n]==1 && white_or_black[n+4]==1) || (white_or_black[n]==1 && white_or_black[n+5]==1))){
+        arch=true;
+//        Serial.println(avg_pulse);
+    }
+    else if (avg_pulse>200 && ((white_or_black[n]!=1 && white_or_black[n+4]!=1) && (white_or_black[n]!=1 && white_or_black[n+5]!=1))){
+      arch=false;
+    }
+  }
+}
+  
+void followArch(){
+  for(int m=0; m<8; m++){
+    // this assumes we are following the left path (won't work on the way back)
+    if(white_or_black[m]==1 && m<5){ // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
+      sensor_values[m] = fake_no_path[m];
+    }
+  }
+}
+
 void loop() {
   // put your main code here, to run repeatedly: 
 //  currentTime = millis();
@@ -146,37 +192,65 @@ void loop() {
         white_or_black[i] = false;
       }
     }
+
+    //CHANGE MADE 5/19/25: check track type every time after getting array of white_or_black 
+  checkTrackType();
+
+  if (arch){
+    followArch();
+  }
+    
 //    Serial.println();
   getError();
   getPID_error();
 //  Serial.println(error);
 
+  for(int k=0; k<8; k++){
+  Serial.print(white_or_black[k]);
+  }
+  Serial.println();
+//  for(int k=0; k<8; k++){
+//  Serial.print(sensor_values[k]);
+//  Serial.print('\t');
+//  }
+//  Serial.println();
+//  Serial.println();
+  
+
   // CHANGE MADE 5/19/25: allow wheels to turn in reverse
 
   int left_spd = spd + pid_error;
   int right_spd = spd - pid_error;
+  int max_bound = MAXSPEED;
   
   if (left_spd < 0) {
+    left_spd = -left_spd;
+    max_bound = MAXSPEED - spd; // this caps the absolute value of the negative speed to be the same as the max of the positive speed
     digitalWrite(left_dir_pin, HIGH);
   } else {
     digitalWrite(left_dir_pin, LOW);
+    max_bound = MAXSPEED;
   }
 
   if (right_spd < 0) {
+    right_spd = -right_spd;
     digitalWrite(right_dir_pin, HIGH);
+    max_bound = MAXSPEED - spd;
   } else {
     digitalWrite(right_dir_pin, LOW);
+    max_bound = MAXSPEED;
   }
 
   
   //+error: center of car too much to the left (+pid_error to left)
   //-error: center of car too much to the right (+pid_error to right)
   //5/19/25: ADDED CONSTRAIN
-  analogWrite(left_pwm_pin,constrain(left_spd, 0, MAXSPEED));
-  analogWrite(right_pwm_pin,constrain(right_spd, 0, MAXSPEED));
+  analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
+  analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));  // the bound changes depending on if its reversing or not
   
 }
 
+  
  
 //  int leftSpd = 70;
 
