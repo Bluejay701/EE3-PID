@@ -53,7 +53,7 @@ double ki = 0;
 
 // Recognize path type
 //bool arch = false;
-bool biasOrder[4] = {true, true, true, true}; // true means left biased
+bool biasOrder[2] = {true, false}; // true means left biased
 bool currentBias = biasOrder[0]; // true is left biased, false is right biased
 
 bool turn_at_end = false;
@@ -220,40 +220,77 @@ void loop() {
     Serial.print(getEncoderCount_right());
     Serial.println();
 
+    // 
     if (checkEnd() && !turn_at_end) {
       if (turn_buffer > 2) {
         turn_buffer = 0;
         turn_at_end = true;
-    resetEncoderCount_right();
-    resetEncoderCount_left();
-        } else {
-          turn_buffer++;
-        }
+        resetEncoderCount_right();
+        resetEncoderCount_left();
+      } else {
+        turn_buffer++;
+      }
   }
 
+  // phantom crosspiece prevention
   if (!checkEnd() && turn_buffer > 0) {
     turn_buffer = 0;
   }
 
+  // end of turn means we now must be right biased
   if (turn_at_end && abs(getEncoderCount_right()) > 400) {
     turn_at_end = false;
+    currentBias = biasOrder[1]; // change bias to right bias or whatever is next in the biasorder
   }
   
 
     // block out values on the left or right depending on bias
     int first_black_index = -1;
+    if (currentBias) {
       for(int m=7; m>=0; m--){
-    // this assumes we are following the left path (won't work on the way back)
-    if(white_or_black[m]==1){ // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
-      first_black_index = m;
-      break;
+      // this assumes we are following the left path
+        if(white_or_black[m]==1){ 
+          // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
+          first_black_index = m;
+          break;
+        }
+      }
+    } else {
+      for(int m=0; m<8; m++){
+      // this assumes we are following the right path
+        if(white_or_black[m]==1){ 
+          // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
+          first_black_index = m;
+          break;
+        }
+      }
     }
-  }
-  if (first_black_index != -1) {
-    for (int i = 0; i < first_black_index; i++) {
-    sensor_values[i] = fake_no_path[i];
-  }
-  }
+  
+    
+    if (first_black_index != -1) {
+      if (currentBias) {
+        // strategy 1: block out all irrelevant black values and pretend that they're white
+        for (int i = 0; i < first_black_index; i++) {
+          sensor_values[i] = fake_no_path[i];
+        }
+
+        // strategy 2: change the weights
+        // for (int i = 0; i < first_black_index; i++) {
+        //   weights[i] = -1;
+        // }
+      } else {
+        for (int i = 8; i > first_black_index; i--) {
+          sensor_values[i] = fake_no_path[i];
+        }
+
+        // strategy 2: change the weights
+        // for (int i = 0; i > first_black_index; i--) {
+        //   weights[i] = 1;
+        // }
+
+      }
+    
+    }
 
   
 
