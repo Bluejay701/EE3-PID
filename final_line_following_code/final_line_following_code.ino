@@ -33,26 +33,33 @@ int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
-const double MAXSPEED=30;
+const double MAXSPEED=40;
 double error=0;
 double last_error=0;
 double deltaE = 0;
 double totalError = 0;
 double pid_error = 0;
 
-double spd=15;
+double spd=25;
 uint16_t previousTime = 0;
 uint16_t currentTime = 0;
 const int interval = 6; //ms
 bool PID_ON=true;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
-double kp = -0.005;
-double kd = -0.05;
+double kp = -0.04;
+double kd = -0.15;
 double ki = 0;
 
 // Recognize path type
-bool arch = false;
+//bool arch = false;
+bool biasOrder[4] = {true, true, true, true}; // true means left biased
+bool currentBias = biasOrder[0]; // true is left biased, false is right biased
+
+bool turn_at_end = false;
+int turn_buffer = 0;
+
+
 
 int getL=0;
 int getR=0;
@@ -146,29 +153,42 @@ void getError(){
   }
 }
 
-void checkTrackType(){
-  avg_pulse = average_pulse_count();  // start encoder counts from 0
-
-    // CHANGE MADE 5/19/25: After wheels rotate 200 counts AND either condition (3 or 4 zeros in between 2 ones) are true, toggle ON boolean for arch
-    for (int n=0; n<8; n++){
-      if (avg_pulse>200 && ((white_or_black[n]==1 && white_or_black[n+4]==1) || (white_or_black[n]==1 && white_or_black[n+5]==1))){
-        arch=true;
-//        Serial.println(avg_pulse);
-    }
-    else if (avg_pulse>200 && ((white_or_black[n]!=1 && white_or_black[n+4]!=1) && (white_or_black[n]!=1 && white_or_black[n+5]!=1))){
-      arch=false;
-    }
-  }
-}
+bool checkEnd() {
   
-void followArch(){
-  for(int m=0; m<8; m++){
-    // this assumes we are following the left path (won't work on the way back)
-    if(white_or_black[m]==1 && m<5){ // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
-      sensor_values[m] = fake_no_path[m];
+  for(int k=0; k<8; k++){
+    if(white_or_black[k]==0){
+      return false;
     }
   }
+
+  return true;
 }
+
+//void checkTrackType(){
+//  avg_pulse = average_pulse_count();  // start encoder counts from 0
+//
+//    // CHANGE MADE 5/19/25: After wheels rotate 200 counts AND either condition (3 or 4 zeros in between 2 ones) are true, toggle ON boolean for arch
+//    for (int n=0; n<8; n++){
+//      if (avg_pulse>200 && ((white_or_black[n]==1 && white_or_black[n+4]==1) || (white_or_black[n]==1 && white_or_black[n+5]==1))){
+//        arch=true;
+////        Serial.println(avg_pulse);
+//    }
+//    else if (avg_pulse>200 && ((white_or_black[n]!=1 && white_or_black[n+4]!=1) && (white_or_black[n]!=1 && white_or_black[n+5]!=1))){
+//      arch=false;
+//    }
+//
+//    if (avg_pulse>100 && ((white_or_black[n]==1) && white_or_black[n+1]==1 && white_or_black[n+2]) 
+//  }
+//}
+  
+//void followArch(){
+//  for(int m=0; m<8; m++){
+//    // this assumes we are following the left path (won't work on the way back)
+//    if(white_or_black[m]==1 && m<5){ // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
+//      sensor_values[m] = fake_no_path[m];
+//    }
+//  }
+//}
 
 void loop() {
   // put your main code here, to run repeatedly: 
@@ -193,22 +213,66 @@ void loop() {
       }
     }
 
-    //CHANGE MADE 5/19/25: check track type every time after getting array of white_or_black 
-  checkTrackType();
+//    turn_at_end = true;
 
-  if (arch){
-    followArch();
+    Serial.print(getEncoderCount_left());
+    Serial.println();
+    Serial.print(getEncoderCount_right());
+    Serial.println();
+
+    if (checkEnd() && !turn_at_end) {
+      if (turn_buffer > 2) {
+        turn_buffer = 0;
+        turn_at_end = true;
+    resetEncoderCount_right();
+    resetEncoderCount_left();
+        } else {
+          turn_buffer++;
+        }
   }
+
+  if (!checkEnd() && turn_buffer > 0) {
+    turn_buffer = 0;
+  }
+
+  if (turn_at_end && abs(getEncoderCount_right()) > 400) {
+    turn_at_end = false;
+  }
+  
+
+    // block out values on the left or right depending on bias
+    int first_black_index = -1;
+      for(int m=7; m>=0; m--){
+    // this assumes we are following the left path (won't work on the way back)
+    if(white_or_black[m]==1){ // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
+      first_black_index = m;
+      break;
+    }
+  }
+  if (first_black_index != -1) {
+    for (int i = 0; i < first_black_index; i++) {
+    sensor_values[i] = fake_no_path[i];
+  }
+  }
+
+  
+
+    //CHANGE MADE 5/19/25: check track type every time after getting array of white_or_black 
+//  checkTrackType();
+
+//  if (arch){
+//    followArch();
+//  }
     
 //    Serial.println();
   getError();
   getPID_error();
 //  Serial.println(error);
 
-  for(int k=0; k<8; k++){
-  Serial.print(white_or_black[k]);
-  }
-  Serial.println();
+//  for(int k=0; k<8; k++){
+//  Serial.print(white_or_black[k]);
+//  }
+//  Serial.println();
 //  for(int k=0; k<8; k++){
 //  Serial.print(sensor_values[k]);
 //  Serial.print('\t');
@@ -225,7 +289,7 @@ void loop() {
   
   if (left_spd < 0) {
     left_spd = -left_spd;
-    max_bound = MAXSPEED - spd; // this caps the absolute value of the negative speed to be the same as the max of the positive speed
+    max_bound = MAXSPEED; // this caps the absolute value of the negative speed to be the same as the max of the positive speed
     digitalWrite(left_dir_pin, HIGH);
   } else {
     digitalWrite(left_dir_pin, LOW);
@@ -235,7 +299,7 @@ void loop() {
   if (right_spd < 0) {
     right_spd = -right_spd;
     digitalWrite(right_dir_pin, HIGH);
-    max_bound = MAXSPEED - spd;
+    max_bound = MAXSPEED;
   } else {
     digitalWrite(right_dir_pin, LOW);
     max_bound = MAXSPEED;
@@ -245,6 +309,12 @@ void loop() {
   //+error: center of car too much to the left (+pid_error to left)
   //-error: center of car too much to the right (+pid_error to right)
   //5/19/25: ADDED CONSTRAIN
+  if (turn_at_end) {
+    digitalWrite(right_dir_pin, LOW);
+    digitalWrite(left_dir_pin, HIGH);
+    left_spd = MAXSPEED;
+    right_spd = MAXSPEED;
+  }
   analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
   analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));  // the bound changes depending on if its reversing or not
   
