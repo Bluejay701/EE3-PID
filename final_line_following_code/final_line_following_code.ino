@@ -27,28 +27,29 @@ void getPID_error();
 void getData();
 
 bool white_or_black[8] = {0};
-int white_threshold[8] = {1000,900,900,800,900,750,900,1100};
+int white_threshold[8] = {1100,900,800,800,800,800,950,1100};
 int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
-const double MAXSPEED=50;
+const double MAXSPEED=45;
 double error=0;
 double last_error=0;
 double deltaE = 0;
 double totalError = 0;
 double pid_error = 0;
 
-double spd=35;
+double spd=25;
 uint16_t previousTime = 0;
 uint16_t currentTime = 0;
 const int interval = 6; //ms
 bool PID_ON=true;
+bool first_turn = false;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
-double kp = -0.04;
-double kd = -0.15;
+double kp = -0.003;
+double kd = -0.03;
 double ki = 0;
 
 // Recognize path type
@@ -165,7 +166,7 @@ bool checkEnd() {
     }
   }
 
-  return count_black > 4;
+  return count_black > 5;
 }
 
 bool checkWhite() {
@@ -232,17 +233,21 @@ void loop() {
 
 //    turn_at_end = true;
 
-    Serial.print(getEncoderCount_left());
-    Serial.println();
-    Serial.print(getEncoderCount_right());
-    Serial.println();
+//    Serial.print(getEncoderCount_left());
+//    Serial.println();
+//    Serial.print(getEncoderCount_right());
+//    Serial.println();
 
     // 
-    if(beginning_count>500){
+    if(beginning_count>50){
+      kp = -0.04;
+      kd = -0.3;
       
-      if (checkEnd() && !turn_at_end) {
+      if (checkEnd() && !turn_at_end ) {
           if (turn_buffer > 2) {
             turn_buffer = 0;
+            first_turn = !first_turn;
+           
             turn_at_end = true;
             resetEncoderCount_right();
             resetEncoderCount_left();
@@ -385,11 +390,14 @@ void loop() {
   //+error: center of car too much to the left (+pid_error to left)
   //-error: center of car too much to the right (+pid_error to right)
   //5/19/25: ADDED CONSTRAIN
-  if (turn_at_end) {
+  if (turn_at_end && first_turn) {
     digitalWrite(right_dir_pin, LOW);
     digitalWrite(left_dir_pin, HIGH);
     left_spd = MAXSPEED;
     right_spd = MAXSPEED;
+  } else if (turn_at_end && !first_turn) {
+    left_spd = 0;
+    right_spd = 0;
   }
   if(turn_at_jump){
     digitalWrite(right_dir_pin, HIGH);
