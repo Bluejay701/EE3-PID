@@ -34,7 +34,8 @@ int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
-const double MAXSPEED=65;
+//int weights[8] = {-15, -14, -12, -8, 8, 12, 14, 15};
+const double MAXSPEED=80;
 double error=0;
 double last_error=0;
 double deltaE = 0;
@@ -49,8 +50,8 @@ bool PID_ON=true;
 bool first_turn = false;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
-double kp = -0.007;
-double kd = -0.08;
+double kp = -0.005;
+double kd = -0.05;
 double ki = 0;
 
 // Recognize path type
@@ -253,8 +254,9 @@ void loop() {
 
     // 
     if(beginning_count>250){
-      kp = -0.008;
-      kd = -0.08; // prev -0.075
+      kp = -0.02;
+      kd = -0.2; // prev -0.075
+      int weights[8] = {-15, -14, -12, -9, 9, 12, 14, 15};
       
       if (checkEnd() && !turn_at_end ) {
           if (turn_buffer > 2) {
