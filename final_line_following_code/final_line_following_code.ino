@@ -20,6 +20,7 @@ const int left_pwm_pin=40;
 const int right_nslp_pin=11; // nslp ==> awake & ready for PWM
 const int right_dir_pin=30;
 const int right_pwm_pin=39;
+const int debug_led_pin = 41;
 const int LED_RF = 41;
 
 void doCalibration();
@@ -33,14 +34,14 @@ int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
-const double MAXSPEED=45;
+const double MAXSPEED=65;
 double error=0;
 double last_error=0;
 double deltaE = 0;
 double totalError = 0;
 double pid_error = 0;
 
-double spd=25;
+double spd=35;
 uint16_t previousTime = 0;
 uint16_t currentTime = 0;
 const int interval = 6; //ms
@@ -48,8 +49,8 @@ bool PID_ON=true;
 bool first_turn = false;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
-double kp = -0.003;
-double kd = -0.03;
+double kp = -0.007;
+double kd = -0.08;
 double ki = 0;
 
 // Recognize path type
@@ -61,6 +62,7 @@ bool turn_at_end = false;
 bool turn_at_jump = false;
 int turn_buffer = 0;
 int turn_buffer_jump = 0;
+int hard_code_cooldown = 0;
 
 
 int beginning_count = 0;
@@ -80,6 +82,8 @@ void setup() {
   pinMode(right_nslp_pin,OUTPUT);
   pinMode(right_dir_pin,OUTPUT);
   pinMode(right_pwm_pin,OUTPUT);
+  
+  pinMode(debug_led_pin, OUTPUT);
 
   digitalWrite(left_dir_pin,LOW);
   digitalWrite(left_nslp_pin,HIGH);
@@ -92,10 +96,13 @@ void setup() {
 // set the data rate in bits/second for serial data transmission
   Serial.begin(9600);
 
+  digitalWrite(debug_led_pin, HIGH);
+
   resetEncoderCount_left();
   resetEncoderCount_right();
    
   delay(2000); //Wait 2 seconds before starting 
+  digitalWrite(debug_led_pin, LOW);
   
 }
 
@@ -207,6 +214,12 @@ bool checkWhite() {
 //}
 
 void loop() {
+
+  if (currentBias) {
+    digitalWrite(debug_led_pin, HIGH);
+  } else {
+    digitalWrite(debug_led_pin, LOW);
+  }
   // put your main code here, to run repeatedly: 
 //  currentTime = millis();
   if(PID_ON){
@@ -239,9 +252,9 @@ void loop() {
 //    Serial.println();
 
     // 
-    if(beginning_count>50){
-      kp = -0.04;
-      kd = -0.3;
+    if(beginning_count>250){
+      kp = -0.008;
+      kd = -0.08; // prev -0.075
       
       if (checkEnd() && !turn_at_end ) {
           if (turn_buffer > 2) {
@@ -262,6 +275,11 @@ void loop() {
           turn_at_jump = true;
           resetEncoderCount_right();
           resetEncoderCount_left();
+          // digitalWrite(debug_led_pin, HIGH);
+
+          if (!currentBias) { // if right biased, temp switch to left bias
+            currentBias = !currentBias;
+          }
         }else{
           turn_buffer_jump++;
         }
@@ -273,13 +291,21 @@ void loop() {
       }
     
       // end of turn means we now must be right biased
-      if (turn_at_end && abs(getEncoderCount_right()) > 275) {
+      if (turn_at_end && abs(getEncoderCount_right()) > 275 && abs(getEncoderCount_left()) > 275) {
         turn_at_end = false;
+        beginning_count = 0;
         currentBias = biasOrder[1]; // change bias to right bias or whatever is next in the biasorder
       }
     
       // check if turned __ counts for the jump
-      if (turn_at_jump && abs(getEncoderCount_left()) > 50 || (turn_at_jump && !checkWhite())){
+      // if (turn_at_jump && abs(getEncoderCount_left()) > 50 || (turn_at_jump && !checkWhite())){
+        if (turn_at_jump && (abs(getEncoderCount_left()) > 40 && abs(getEncoderCount_right()) > 30)){
+          // if (turn_at_jump && (abs(getEncoderCount_left()) > 40)){
+        beginning_count = 0;
+        if (currentBias && first_turn) { // if switched to left bias after the first turn
+            currentBias = !currentBias;
+          }
+        // digitalWrite(debug_led_pin, LOW);
         turn_at_jump=false;
       }
       
@@ -292,7 +318,11 @@ void loop() {
       // this assumes we are following the left path
         if(white_or_black[m]==1){ 
           // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
-          first_black_index = m;
+          if (m > 0 && white_or_black[m-1] == 1) {
+            first_black_index = m - 1;
+          } else {
+            first_black_index = m;
+          }
           break;
         }
       }
@@ -301,7 +331,11 @@ void loop() {
       // this assumes we are following the right path
         if(white_or_black[m]==1){ 
           // ignores the readings from right sensors I believe, which makes error only positive, i.e. follow the left line
-          first_black_index = m;
+          if (m < 7 && white_or_black[m+1] == 1) {
+            first_black_index = m+1;
+          } else {
+            first_black_index = m;
+          }
           break;
         }
       }
@@ -400,10 +434,26 @@ void loop() {
     right_spd = 0;
   }
   if(turn_at_jump){
+    // digitalWrite(right_dir_pin, LOW);
+    // digitalWrite(left_dir_pin, LOW);
+    // left_spd=spd;
+    // right_spd=spd;
+    // analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
+    // analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));
+
+    // delay(750);
+    // resetEncoderCount_left();
+    // resetEncoderCount_right();
     digitalWrite(right_dir_pin, HIGH);
     digitalWrite(left_dir_pin, LOW);
-    left_spd=MAXSPEED;
-    right_spd=MAXSPEED - 15;
+    left_spd=spd;
+    right_spd=spd-20;
+    
+    // analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
+    // analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));
+    // delay(500);
+    // turn_at_jump = false;
+
   }
   analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
   analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));  // the bound changes depending on if its reversing or not
