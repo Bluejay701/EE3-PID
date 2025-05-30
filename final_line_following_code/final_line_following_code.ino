@@ -446,7 +446,7 @@ void loop() {
     // delay(750);
     // resetEncoderCount_left();
     // resetEncoderCount_right();
-    digitalWrite(right_dir_pin, HIGH);
+    digitalWrite(right_dir_pin, LOW); // changed both to low so that the car moves forward when doing the jump hard coded portion, hopefully helping with any weirdness that has been arising when testing
     digitalWrite(left_dir_pin, LOW);
     left_spd=spd;
     right_spd=spd-20;
