@@ -34,20 +34,21 @@ int fake_no_path[8] = {714,620,573,457,550,503,526,809};
 int minimum[8] = {0};//{577,484,484,415,484,484,461,812};
 int maximum[8] = {1923,1328,1375,849,1375,923,1493};
 int weights[8] = {-8, -4, -2, -1, 1, 2, 4, 8};
-//int weights[8] = {-15, -14, -12, -8, 8, 12, 14, 15};
-const double MAXSPEED=80;
+int track_weights[8] = {-15, -14, -12, -8, 8, 12, 14, 15};
+const double MAXSPEED=70;
 double error=0;
 double last_error=0;
 double deltaE = 0;
 double totalError = 0;
 double pid_error = 0;
 
-double spd=35;
+double spd=25;
 uint16_t previousTime = 0;
 uint16_t currentTime = 0;
 const int interval = 6; //ms
 bool PID_ON=true;
 bool first_turn = false;
+int temp_left_bias = 0;
 //double kp, kd, ki;
 // 5/19/25: CONSTANTS
 double kp = -0.005;
@@ -216,11 +217,11 @@ bool checkWhite() {
 
 void loop() {
 
-  if (currentBias) {
-    digitalWrite(debug_led_pin, HIGH);
-  } else {
-    digitalWrite(debug_led_pin, LOW);
-  }
+  // if (currentBias) {
+  //   digitalWrite(debug_led_pin, HIGH);
+  // } else {
+  //   digitalWrite(debug_led_pin, LOW);
+  // }
   // put your main code here, to run repeatedly: 
 //  currentTime = millis();
   if(PID_ON){
@@ -254,9 +255,17 @@ void loop() {
 
     // 
     if(beginning_count>250){
-      kp = -0.02;
-      kd = -0.2; // prev -0.075
-      int weights[8] = {-15, -14, -12, -9, 9, 12, 14, 15};
+      // kp = -0.005;
+      // kd = -0; // prev -0.075
+      // int weights[8] = {-15, -14, -12, -8, 8, 12, 14, 15};
+
+      kp = -0.005;
+      kd = 0;
+
+      for(int i=0;i<8;i++)
+      {
+        weights[i]=track_weights[i];
+      }
       
       if (checkEnd() && !turn_at_end ) {
           if (turn_buffer > 2) {
@@ -272,16 +281,16 @@ void loop() {
       }
     
       if (!turn_at_end && checkWhite() && !turn_at_jump){
-        if(turn_buffer_jump>10){
+        if(turn_buffer_jump>15){
           turn_buffer_jump=0;
           turn_at_jump = true;
           resetEncoderCount_right();
           resetEncoderCount_left();
-          // digitalWrite(debug_led_pin, HIGH);
+          digitalWrite(debug_led_pin, HIGH);
 
-          if (!currentBias) { // if right biased, temp switch to left bias
-            currentBias = !currentBias;
-          }
+          // if (!currentBias) { // if right biased, temp switch to left bias
+          //   currentBias = !currentBias;
+          // }
         }else{
           turn_buffer_jump++;
         }
@@ -301,13 +310,24 @@ void loop() {
     
       // check if turned __ counts for the jump
       // if (turn_at_jump && abs(getEncoderCount_left()) > 50 || (turn_at_jump && !checkWhite())){
-        if (turn_at_jump && (abs(getEncoderCount_left()) > 40 && abs(getEncoderCount_right()) > 30)){
-          // if (turn_at_jump && (abs(getEncoderCount_left()) > 40)){
-        beginning_count = 0;
-        if (currentBias && first_turn) { // if switched to left bias after the first turn
+        // if (turn_at_jump && (abs(getEncoderCount_left()) > 50 && abs(getEncoderCount_right()) > 50)){
+      int temp_bias_duration = 100;
+
+      if (first_turn) {
+        temp_bias_duration = 200;
+      }
+      
+      if (temp_left_bias > temp_bias_duration) {
+            // currentBias = false;
+          if (currentBias && first_turn) { // if switched to left bias after the first turn
             currentBias = !currentBias;
           }
-        // digitalWrite(debug_led_pin, LOW);
+ 
+        temp_left_bias = 0;
+          // if (turn_at_jump && (abs(getEncoderCount_left()) > 40)){
+        beginning_count = 0;
+        
+        digitalWrite(debug_led_pin, LOW);
         turn_at_jump=false;
       }
       
@@ -436,6 +456,10 @@ void loop() {
     right_spd = 0;
   }
   if(turn_at_jump){
+    temp_left_bias++;
+    if (!currentBias) {
+      currentBias = true;
+    }
     // digitalWrite(right_dir_pin, LOW);
     // digitalWrite(left_dir_pin, LOW);
     // left_spd=spd;
@@ -446,10 +470,21 @@ void loop() {
     // delay(750);
     // resetEncoderCount_left();
     // resetEncoderCount_right();
+
+  // commented out below
+
     digitalWrite(right_dir_pin, LOW); // changed both to low so that the car moves forward when doing the jump hard coded portion, hopefully helping with any weirdness that has been arising when testing
     digitalWrite(left_dir_pin, LOW);
     left_spd=spd;
-    right_spd=spd-20;
+
+    // if (!currentBias) {
+    //   right_spd=spd;
+    // } else {
+      right_spd=spd - 10;
+    // }
+
+    // --------
+    
     
     // analogWrite(left_pwm_pin,constrain(left_spd, 0, max_bound));
     // analogWrite(right_pwm_pin,constrain(right_spd, 0, max_bound));
