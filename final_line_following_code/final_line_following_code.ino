@@ -281,7 +281,7 @@ void loop() {
       }
     
       if (!turn_at_end && checkWhite() && !turn_at_jump){
-        if(turn_buffer_jump>15){
+        if(turn_buffer_jump>5){
           turn_buffer_jump=0;
           turn_at_jump = true;
           resetEncoderCount_right();
@@ -311,10 +311,10 @@ void loop() {
       // check if turned __ counts for the jump
       // if (turn_at_jump && abs(getEncoderCount_left()) > 50 || (turn_at_jump && !checkWhite())){
         // if (turn_at_jump && (abs(getEncoderCount_left()) > 50 && abs(getEncoderCount_right()) > 50)){
-      int temp_bias_duration = 100;
+      int temp_bias_duration = 200;
 
       if (first_turn) {
-        temp_bias_duration = 200;
+        temp_bias_duration = 250;
       }
       
       if (temp_left_bias > temp_bias_duration) {
